@@ -1,19 +1,24 @@
 const appEl = document.getElementById('app');
+const SHARE_BASE_OVERRIDE = window.__OGIRI_SHARE_BASE__ || '';
 
 document.addEventListener('DOMContentLoaded', () => {
   route();
-  window.addEventListener('popstate', route);
+  window.addEventListener('hashchange', route);
 });
 
 function route() {
-  const path = window.location.pathname;
-  if (path === '/') {
+  const hashPath = window.location.hash.replace(/^#/, '');
+  if (!hashPath && window.location.pathname.startsWith('/prompt/')) {
+    window.location.replace(`#${window.location.pathname}`);
+    return;
+  }
+  const path = normalizePath(hashPath || '/');
+  if (path === '/' || path === '') {
     renderHome();
     return;
   }
   if (path.startsWith('/prompt/')) {
-    const parts = path.split('/').filter(Boolean);
-    const promptId = parts[1];
+    const [, , promptId] = path.split('/');
     if (promptId) {
       renderPrompt(promptId);
       return;
@@ -22,12 +27,17 @@ function route() {
   renderNotFound();
 }
 
+function normalizePath(path) {
+  if (!path) return '/';
+  return path.startsWith('/') ? path : `/${path}`;
+}
+
 function renderHome() {
   const main = document.createElement('main');
   const header = document.createElement('header');
   header.innerHTML = `
     <h1>おてがる大喜利</h1>
-    <p>「調整さん」感覚でURLを作って共有するだけ。スマホ一つでお題→回答→判定まで回せます。</p>
+    <p>「調整さん」みたいにURLを作って貼るだけ。スマホだけでお題→回答→判定が回せます。</p>
   `;
 
   const createCard = document.createElement('section');
@@ -47,7 +57,7 @@ function renderHome() {
         <input type="text" readonly id="share-url" />
         <button type="button" class="secondary-btn" id="copy-share">コピー</button>
       </div>
-      <small>このリンクをグループに貼れば、回答と判定の両方をおまかせできます。</small>
+      <small>このリンクをグループに貼れば回答も判定も同じ場所で遊べます。</small>
     </div>
   `;
 
@@ -56,17 +66,27 @@ function renderHome() {
   howtoCard.innerHTML = `
     <h2>使い方</h2>
     <ul>
-      <li>幹事がお題を入力し、URLを作って共有</li>
-      <li>参加者は匿名でも何度でも回答OK</li>
-      <li>「判定モード」でお題→回答→「おもろい / 普通」をタップするだけ</li>
+      <li>幹事がお題を入力してURLを発行</li>
+      <li>URLを貼れば参加者は匿名でも好きなだけ回答可能</li>
+      <li>「判定モード」でお題→回答→「おもろい / 普通」をタップ</li>
     </ul>
   `;
 
   const footer = document.createElement('footer');
-  footer.textContent = 'β版：フィードバックはなんでもどうぞ！';
+  footer.textContent = 'β版です。Supabase に保存しています。';
 
   main.append(header, createCard, howtoCard, footer);
   appEl.replaceChildren(main);
+
+  const supabaseReady = ensureSupabaseConfigured();
+  if (!supabaseReady) {
+    const warning = document.createElement('p');
+    warning.className = 'error-message';
+    warning.textContent = 'Supabase の URL / anon key が未設定です。docs/config.js を編集してください。';
+    createCard.appendChild(warning);
+    createCard.querySelector('form').classList.add('hidden');
+    return;
+  }
 
   const form = createCard.querySelector('#prompt-form');
   const errorBox = createCard.querySelector('#prompt-error');
@@ -88,19 +108,9 @@ function renderHome() {
     button.disabled = true;
     button.textContent = '発行中...';
     try {
-      const response = await fetch('/api/prompts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic })
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload.error || '発行に失敗しました。');
-      }
-      const prompt = payload.prompt;
-      const shareUrl = `${window.location.origin}/prompt/${prompt.id}`;
+      const prompt = await createPrompt(topic);
       shareTopic.textContent = `お題：${prompt.topic}`;
-      shareUrlInput.value = shareUrl;
+      shareUrlInput.value = getShareUrl(prompt.id);
       shareBox.classList.remove('hidden');
       shareBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
       form.reset();
@@ -131,13 +141,21 @@ async function renderPrompt(promptId) {
   main.appendChild(loadingCard);
   appEl.replaceChildren(main);
 
+  if (!ensureSupabaseConfigured()) {
+    loadingCard.innerHTML = `
+      <p>Supabase の設定が未入力です。docs/config.js を編集してください。</p>
+      <p><a href="#/">トップに戻る</a></p>
+    `;
+    return;
+  }
+
   try {
     const prompt = await fetchPrompt(promptId);
     buildPromptPage(main, prompt);
   } catch (err) {
     loadingCard.innerHTML = `
       <p>${err.message}</p>
-      <p><a href="/">トップに戻る</a></p>
+      <p><a href="#/">トップに戻る</a></p>
     `;
   }
 }
@@ -148,27 +166,106 @@ function renderNotFound() {
   card.className = 'card';
   card.innerHTML = `
     <h2>ページが見つかりません</h2>
-    <p>URLが間違っているか、削除された可能性があります。</p>
-    <p><a href="/">お題を作り直す</a></p>
+    <p>URLが間違っているか、公開準備中の可能性があります。</p>
+    <p><a href="#/">お題を作り直す</a></p>
   `;
   main.appendChild(card);
   appEl.replaceChildren(main);
 }
 
-async function fetchPrompt(promptId) {
-  const response = await fetch(`/api/prompts/${promptId}`);
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload.error || 'お題の取得に失敗しました。');
+async function createPrompt(topic) {
+  const client = getSupabaseClient();
+  const id = generateId(6);
+  const { data, error } = await client
+    .from('prompts')
+    .insert({ id, topic })
+    .select('id, topic, created_at')
+    .single();
+  if (error) {
+    console.error(error);
+    throw new Error('お題の作成に失敗しました。');
   }
-  return payload.prompt;
+  return { id: data.id, topic: data.topic, createdAt: data.created_at, answers: [] };
+}
+
+async function fetchPrompt(promptId) {
+  const client = getSupabaseClient();
+  const { data, error } = await client
+    .from('prompts')
+    .select(
+      `id, topic, created_at,
+      answers:answers(id, text, author, created_at, votes_funny, votes_meh)`
+    )
+    .eq('id', promptId)
+    .single();
+  if (error) {
+    console.error(error);
+    throw new Error('お題が見つかりません。');
+  }
+  return {
+    id: data.id,
+    topic: data.topic,
+    createdAt: data.created_at,
+    answers: (data.answers || [])
+      .map(mapAnswer)
+      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+  };
+}
+
+async function submitAnswer(promptId, payload) {
+  const client = getSupabaseClient();
+  const answerId = generateId(8);
+  const { data, error } = await client
+    .from('answers')
+    .insert({
+      id: answerId,
+      prompt_id: promptId,
+      text: payload.text,
+      author: payload.author || '匿名'
+    })
+    .select('id, text, author, created_at, votes_funny, votes_meh')
+    .single();
+  if (error) {
+    console.error(error);
+    throw new Error('回答の投稿に失敗しました。');
+  }
+  return mapAnswer(data);
+}
+
+async function recordVerdict(promptId, answerId, verdict) {
+  const client = getSupabaseClient();
+  const { data: current, error: fetchError } = await client
+    .from('answers')
+    .select('id, votes_funny, votes_meh')
+    .eq('id', answerId)
+    .eq('prompt_id', promptId)
+    .single();
+  if (fetchError || !current) {
+    console.error(fetchError);
+    throw new Error('該当する回答がありません。');
+  }
+  const update = verdict === 'funny'
+    ? { votes_funny: (current.votes_funny || 0) + 1 }
+    : { votes_meh: (current.votes_meh || 0) + 1 };
+  const { data, error } = await client
+    .from('answers')
+    .update(update)
+    .eq('id', answerId)
+    .eq('prompt_id', promptId)
+    .select('id, text, author, created_at, votes_funny, votes_meh')
+    .single();
+  if (error) {
+    console.error(error);
+    throw new Error('判定の保存に失敗しました。');
+  }
+  return mapAnswer(data);
 }
 
 function buildPromptPage(main, prompt) {
   main.innerHTML = '';
 
   const backLink = document.createElement('a');
-  backLink.href = '/';
+  backLink.href = '#/';
   backLink.textContent = '← お題を作る';
   backLink.className = 'back-link';
 
@@ -180,13 +277,14 @@ function buildPromptPage(main, prompt) {
     <div class="share-box">
       <p>参加者にはこのURLをシェア</p>
       <div class="link-row">
-        <input type="text" readonly id="share-url" value="${window.location.origin}/prompt/${prompt.id}" />
+        <input type="text" readonly id="share-url" />
         <button type="button" class="secondary-btn" id="prompt-copy">コピー</button>
       </div>
       <small>回答と判定は同じページからできます。</small>
     </div>
   `;
   infoCard.querySelector('#prompt-title').textContent = prompt.topic;
+  infoCard.querySelector('#share-url').value = getShareUrl(prompt.id);
 
   const answerCard = document.createElement('section');
   answerCard.className = 'card';
@@ -207,7 +305,7 @@ function buildPromptPage(main, prompt) {
   judgeCard.className = 'card judge-card';
   judgeCard.innerHTML = `
     <h3>判定モード</h3>
-    <p class="alert">「お題のみ表示」→タップ→回答→「おもろい / 普通」を選ぶ流れで判定できます。</p>
+    <p class="alert">「お題のみ表示」→タップ→回答を見る→「おもろい / 普通」を選んで次へ進みます。</p>
     <button id="start-judge">判定をはじめる</button>
     <div id="judge-workspace" class="hidden">
       <div class="prompt-chip">お題</div>
@@ -219,12 +317,12 @@ function buildPromptPage(main, prompt) {
       </div>
       <p class="progress-text" id="judge-progress"></p>
     </div>
-    <div class="alert hidden" id="judge-empty">まだ回答がありません。URLをシェアしてもらいましょう。</div>
+    <div class="alert hidden" id="judge-empty">まだ回答がありません。URLをシェアして参加者を集めましょう。</div>
     <div class="success-message hidden" id="judge-finish">全ての回答を判定しました！</div>
   `;
 
   const footer = document.createElement('footer');
-  footer.textContent = '保存はシンプルなファイルベースです。リロードで状況は更新されます。';
+  footer.textContent = 'Supabase に保存。リロードで最新の回答を取得できます。';
 
   main.append(backLink, infoCard, answerCard, judgeCard, footer);
 
@@ -235,6 +333,7 @@ function buildPromptPage(main, prompt) {
 
 function setupShareCopy(button, input) {
   button.addEventListener('click', () => {
+    if (!input.value) return;
     copyToClipboard(input.value).then(() => {
       button.textContent = 'コピーしました';
       setTimeout(() => (button.textContent = 'コピー'), 1500);
@@ -258,16 +357,15 @@ function setupAnswerForm(card, promptId, onSuccess) {
       text: form.text.value.trim(),
       author: form.author.value.trim()
     };
+    if (!payload.text) {
+      errorBox.textContent = '回答を入力してください。';
+      errorBox.classList.remove('hidden');
+      submitBtn.disabled = false;
+      submitBtn.textContent = '投稿する';
+      return;
+    }
     try {
-      const response = await fetch(`/api/prompts/${promptId}/answers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.error || '投稿に失敗しました。');
-      }
+      await submitAnswer(promptId, payload);
       successBox.textContent = '投稿しました！ 追加の回答も歓迎です。';
       successBox.classList.remove('hidden');
       form.reset();
@@ -334,7 +432,6 @@ function setupJudge(judgeCard, prompt) {
       return;
     }
     emptyAlert.classList.add('hidden');
-    finishBox.classList.add('hidden');
     workspace.classList.remove('hidden');
     updateProgress();
   }
@@ -358,11 +455,7 @@ function setupJudge(judgeCard, prompt) {
     const verdict = button.dataset.verdict;
     judgeButtons.querySelectorAll('button').forEach((btn) => (btn.disabled = true));
     try {
-      await fetch(`/api/prompts/${prompt.id}/judge`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answerId: state.current.id, verdict })
-      });
+      await recordVerdict(prompt.id, state.current.id, verdict);
     } catch (err) {
       console.error(err);
     } finally {
@@ -400,6 +493,47 @@ function shuffle(list) {
   return array;
 }
 
+function mapAnswer(item) {
+  return {
+    id: item.id,
+    text: item.text,
+    author: item.author,
+    createdAt: item.created_at,
+    votes: {
+      funny: item.votes_funny || 0,
+      meh: item.votes_meh || 0
+    }
+  };
+}
+
+function getSupabaseClient() {
+  const client = window.__supabaseClient;
+  if (!client) {
+    throw new Error('Supabase が初期化されていません。');
+  }
+  return client;
+}
+
+function ensureSupabaseConfigured() {
+  return Boolean(window.__supabaseClient);
+}
+
+function getShareUrl(promptId) {
+  let base = SHARE_BASE_OVERRIDE;
+  if (!base) {
+    const { origin, pathname } = window.location;
+    let derivedPath = pathname.replace(/index\.html$/, '');
+    if (!derivedPath.endsWith('/')) {
+      derivedPath += '/';
+    }
+    base = `${origin}${derivedPath}`;
+  }
+  if (!base.endsWith('/')) {
+    base += '/';
+  }
+  return `${base}#/prompt/${promptId}`;
+}
+
 function copyToClipboard(text) {
   if (navigator.clipboard?.writeText) {
     return navigator.clipboard.writeText(text);
@@ -423,4 +557,13 @@ function escapeHtml(str = '') {
       "'": '&#39;'
     }[char]
   ));
+}
+
+function generateId(length) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let id = '';
+  for (let i = 0; i < length; i += 1) {
+    id += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return id;
 }

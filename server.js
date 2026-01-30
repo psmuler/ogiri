@@ -4,7 +4,7 @@ const path = require('path');
 const storage = require('./storage');
 
 const PORT = process.env.PORT || 3000;
-const PUBLIC_DIR = path.join(__dirname, 'public');
+const PUBLIC_DIR = path.join(__dirname, 'docs');
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
