@@ -1,0 +1,10 @@
+{
+  "name": "ogiri",
+  "version": "1.0.0",
+  "description": "Lightweight web app for casual ogiri sessions like Chouseisan.",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

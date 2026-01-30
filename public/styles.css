@@ -1,0 +1,257 @@
+:root {
+  font-family: "Helvetica Neue", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #1a1a1a;
+  background-color: #f5f5f5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: linear-gradient(160deg, #ffe8a3 0%, #ffd2f1 100%);
+  min-height: 100vh;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 10px;
+  color: #ff7f50;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+#app {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 20px 60px;
+}
+
+header h1 {
+  font-size: 1.8rem;
+  margin: 0;
+}
+
+header p {
+  margin: 8px 0 0;
+  color: #444;
+}
+
+.card {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 20px;
+  padding: 24px;
+  margin-top: 20px;
+  box-shadow: 0 15px 45px rgba(0, 0, 0, 0.08);
+}
+
+ul {
+  padding-left: 22px;
+  line-height: 1.6;
+  margin: 12px 0 0;
+}
+
+label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+input[type="text"],
+textarea {
+  width: 100%;
+  border: 1px solid rgba(26, 26, 26, 0.2);
+  border-radius: 16px;
+  padding: 14px 16px;
+  font-size: 1rem;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+button {
+  border: none;
+  border-radius: 999px;
+  padding: 14px 22px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: #ff7f50;
+  color: #fff;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(255, 127, 80, 0.4);
+}
+
+.secondary-btn {
+  background: #fff;
+  color: #ff7f50;
+  border: 2px solid #ff7f50;
+}
+
+.share-box {
+  margin-top: 16px;
+  border: 1px dashed rgba(0, 0, 0, 0.15);
+  border-radius: 16px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.share-box input {
+  margin-top: 10px;
+  font-size: 0.95rem;
+}
+
+.link-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.link-row input {
+  flex: 1;
+}
+
+.prompt-title {
+  font-size: 1.4rem;
+  margin: 0 0 12px;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff1d6;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.judge-card {
+  text-align: center;
+}
+
+.prompt-chip {
+  display: inline-block;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.05);
+  font-size: 0.85rem;
+  margin-bottom: 12px;
+}
+
+.answer-panel {
+  margin-top: 18px;
+  border-radius: 16px;
+  padding: 20px;
+  min-height: 140px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px dashed rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.answer-panel.revealed {
+  border-style: solid;
+  background: #fffceb;
+}
+
+.judge-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.judge-buttons button {
+  flex: 1;
+}
+
+.judge-buttons .funny-btn {
+  background: #ff7f50;
+  color: #fff;
+}
+
+.judge-buttons .meh-btn {
+  background: #fff;
+  color: #ff7f50;
+  border: 2px solid #ff7f50;
+}
+
+.progress-text {
+  margin-top: 14px;
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.alert {
+  background: #fff4e0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-top: 12px;
+  font-size: 0.95rem;
+}
+
+.success-message {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #e5fbef;
+  color: #0d7c4a;
+  font-weight: 600;
+}
+
+.error-message {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #ffe3e3;
+  color: #b20000;
+}
+
+footer {
+  text-align: center;
+  font-size: 0.8rem;
+  color: rgba(0, 0, 0, 0.5);
+  margin-top: 40px;
+}
+
+@media (max-width: 540px) {
+  #app {
+    padding: 24px 16px 50px;
+  }
+
+  .card {
+    padding: 20px;
+    border-radius: 18px;
+  }
+
+  .judge-buttons {
+    flex-direction: column;
+  }
+}
