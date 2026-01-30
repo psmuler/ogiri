@@ -46,6 +46,12 @@ header p {
   color: #444;
 }
 
+.prompt-heading {
+  font-size: 2rem;
+  line-height: 1.4;
+  margin: 8px 0 18px;
+}
+
 .card {
   background: rgba(255, 255, 255, 0.95);
   border-radius: 20px;
@@ -148,6 +154,25 @@ button:hover:not(:disabled) {
   font-weight: 600;
 }
 
+.mode-buttons {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.mode-buttons button {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.05);
+  color: #333;
+  border: 2px solid transparent;
+}
+
+.mode-buttons button.active {
+  background: #ff7f50;
+  color: #fff;
+  border-color: #ff7f50;
+}
+
 .judge-card {
   text-align: center;
 }
@@ -215,6 +240,24 @@ button:hover:not(:disabled) {
   padding: 12px 14px;
   margin-top: 12px;
   font-size: 0.95rem;
+}
+
+.share-card {
+  text-align: left;
+}
+
+.share-card .share-title {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  color: #666;
+  font-weight: 600;
+}
+
+.share-card small {
+  display: block;
+  margin-top: 12px;
+  color: #777;
+  font-size: 0.85rem;
 }
 
 .success-message {

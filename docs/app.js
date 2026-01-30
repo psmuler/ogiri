@@ -269,22 +269,17 @@ function buildPromptPage(main, prompt) {
   backLink.textContent = '← お題を作る';
   backLink.className = 'back-link';
 
-  const infoCard = document.createElement('section');
-  infoCard.className = 'card';
-  infoCard.innerHTML = `
+  const heroCard = document.createElement('section');
+  heroCard.className = 'card prompt-hero';
+  heroCard.innerHTML = `
     <p class="status-pill"><span id="answer-count">${prompt.answers.length}</span> 件の回答</p>
-    <h2 class="prompt-title" id="prompt-title"></h2>
-    <div class="share-box">
-      <p>参加者にはこのURLをシェア</p>
-      <div class="link-row">
-        <input type="text" readonly id="share-url" />
-        <button type="button" class="secondary-btn" id="prompt-copy">コピー</button>
-      </div>
-      <small>回答と判定は同じページからできます。</small>
+    <h2 class="prompt-heading" id="prompt-heading"></h2>
+    <div class="mode-buttons">
+      <button type="button" data-mode="answer" class="active">回答する</button>
+      <button type="button" data-mode="judge">判定する</button>
     </div>
   `;
-  infoCard.querySelector('#prompt-title').textContent = prompt.topic;
-  infoCard.querySelector('#share-url').value = getShareUrl(prompt.id);
+  heroCard.querySelector('#prompt-heading').textContent = prompt.topic;
 
   const answerCard = document.createElement('section');
   answerCard.className = 'card';
@@ -306,7 +301,7 @@ function buildPromptPage(main, prompt) {
   judgeCard.innerHTML = `
     <h3>判定モード</h3>
     <p class="alert">「お題のみ表示」→タップ→回答を見る→「おもろい / 普通」を選んで次へ進みます。</p>
-    <button id="start-judge">判定をはじめる</button>
+    <button type="button" id="start-judge">判定をはじめる</button>
     <div id="judge-workspace" class="hidden">
       <div class="prompt-chip">お題</div>
       <p class="prompt-title" id="judge-prompt"></p>
@@ -321,14 +316,41 @@ function buildPromptPage(main, prompt) {
     <div class="success-message hidden" id="judge-finish">全ての回答を判定しました！</div>
   `;
 
+  const shareCard = document.createElement('section');
+  shareCard.className = 'card share-card';
+  shareCard.innerHTML = `
+    <p class="share-title">参加者にはこのURLをシェア</p>
+    <div class="link-row">
+      <input type="text" readonly id="share-url" />
+      <button type="button" class="secondary-btn" id="prompt-copy">コピー</button>
+    </div>
+    <small>回答と判定はこのリンクひとつでOK。</small>
+  `;
+  shareCard.querySelector('#share-url').value = getShareUrl(prompt.id);
+
   const footer = document.createElement('footer');
   footer.textContent = 'Supabase に保存。リロードで最新の回答を取得できます。';
 
-  main.append(backLink, infoCard, answerCard, judgeCard, footer);
+  main.append(backLink, heroCard, answerCard, judgeCard, shareCard, footer);
 
-  setupShareCopy(infoCard.querySelector('#prompt-copy'), infoCard.querySelector('#share-url'));
+  setupShareCopy(shareCard.querySelector('#prompt-copy'), shareCard.querySelector('#share-url'));
   setupAnswerForm(answerCard, prompt.id, () => renderPrompt(prompt.id));
-  setupJudge(judgeCard, prompt);
+  const judgeControls = setupJudge(judgeCard, prompt);
+
+  const modeButtons = heroCard.querySelectorAll('[data-mode]');
+  function switchMode(mode) {
+    modeButtons.forEach((btn) => btn.classList.toggle('active', btn.dataset.mode === mode));
+    answerCard.classList.toggle('hidden', mode !== 'answer');
+    judgeCard.classList.toggle('hidden', mode !== 'judge');
+    judgeControls?.handleModeChange(mode);
+    if (mode === 'judge') {
+      judgeCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+  modeButtons.forEach((btn) => {
+    btn.addEventListener('click', () => switchMode(btn.dataset.mode));
+  });
+  switchMode('answer');
 }
 
 function setupShareCopy(button, input) {
@@ -465,7 +487,9 @@ function setupJudge(judgeCard, prompt) {
     loadNext();
   });
 
-  startBtn.addEventListener('click', () => {
+  let autoStarted = false;
+
+  function beginJudging() {
     if (!prompt.answers.length) {
       emptyAlert.classList.remove('hidden');
       return;
@@ -476,12 +500,33 @@ function setupJudge(judgeCard, prompt) {
     startBtn.textContent = '判定中...';
     startBtn.disabled = true;
     loadNext();
-  });
+  }
+
+  startBtn.addEventListener('click', beginJudging);
 
   if (!prompt.answers.length) {
     emptyAlert.classList.remove('hidden');
+    startBtn.disabled = true;
+    startBtn.textContent = '回答が集まると判定できます';
   }
   updateProgress();
+  return {
+    handleModeChange(mode) {
+      if (mode !== 'judge') return;
+      if (!prompt.answers.length) {
+        emptyAlert.classList.remove('hidden');
+        return;
+      }
+      if (startBtn.disabled && startBtn.textContent.includes('判定できます')) {
+        startBtn.disabled = false;
+        startBtn.textContent = '判定をはじめる';
+      }
+      if (!autoStarted) {
+        autoStarted = true;
+        beginJudging();
+      }
+    }
+  };
 }
 
 function shuffle(list) {
